@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务管理 - 管理后台</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .task-summary { display:flex; gap:16px; margin-bottom:16px; }
+    .task-summary .summary-item {
+      background: var(--bg-white);
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      box-shadow: var(--shadow);
+      font-size: 14px;
+    }
+    .task-summary .summary-item .num { font-size: 22px; font-weight: 700; margin-right: 4px; }
+    .task-summary .summary-item .num.primary { color: var(--primary); }
+    .task-summary .summary-item .num.success { color: var(--success); }
+    .task-summary .summary-item .num.danger { color: var(--danger); }
+    .task-summary .summary-item .num.warning { color: var(--warning); }
+
+    .task-group { background: var(--bg-white); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 12px; overflow:hidden; }
+    .group-header {
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      border-bottom: 1px solid transparent;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .group-header:hover { background: #f8f9fa; }
+    .group-header.expanded { border-bottom-color: var(--border); }
+    .group-header .group-title {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .group-header .group-title .area-tag {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-light);
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .group-header .group-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .group-header .group-right .progress-bar {
+      width: 80px;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .group-header .group-right .progress-bar .fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .group-header .group-right .fill.all-done { background: var(--success); }
+    .group-header .group-right .fill.has-overdue { background: var(--danger); }
+    .group-header .group-right .fill.in-progress { background: var(--primary); }
+    .group-header .arrow {
+      font-size: 12px;
+      color: var(--text-light);
+      transition: transform 0.2s;
+    }
+    .group-header.expanded .arrow { transform: rotate(90deg); }
+    .group-body { display: none; }
+    .group-body.show { display: block; }
+    .task-empty { text-align:center; color:var(--text-light); padding:40px 0; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div class="admin-layout">
+    <div class="admin-content">
+      <div class="page-header"><h2>任务管理</h2></div>
+
+      <div class="card">
+        <div class="card-body">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label>日期</label>
+              <input type="date" class="form-input" id="dateFilter">
+            </div>
+            <div class="form-group">
+              <label>状态</label>
+              <select class="form-select" id="statusFilter">
+                <option value="">全部</option>
+                <option value="pending">待完成</option>
+                <option value="completed">已完成</option>
+                <option value="overdue">超时未检查</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <button class="btn btn-primary" onclick="loadTasks()">搜索</button>
+            </div>
+          </div>
+          <div class="filter-bar" style="margin-top:8px;">
+            <div class="form-group">
+              <label>生成开始日期</label>
+              <input type="date" class="form-input" id="genStartDate">
+            </div>
+            <div class="form-group">
+              <label>生成结束日期</label>
+              <input type="date" class="form-input" id="genEndDate">
+            </div>
+            <div class="form-group">
+              <button class="btn btn-success" onclick="generateTasks()">生成任务</button>
+              <button class="btn btn-danger" id="deleteAllBtn" style="display:none;" onclick="confirmDeleteAll()">删除全部任务</button>
+            </div>
+          </div>
+
+          <div class="task-summary" id="taskSummary"></div>
+          <div id="taskGroups"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h3>确认删除</h3>
+        <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMsg" style="color:var(--danger);"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('confirmModal')">取消</button>
+        <button class="btn btn-danger" id="confirmBtn" onclick="">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/admin/layout.js"></script>
+  <script>
+    initAdminLayout('tasks');
+    var user = AUTH.getUser();
+    var isSuperAdmin = user.role === 'super_admin';
+    document.getElementById('dateFilter').value = Utils.getToday();
+
+    if (isSuperAdmin) {
+      document.getElementById('deleteAllBtn').style.display = '';
+    }
+
+    var genStart = new Date();
+    var genEnd = new Date();
+    genEnd.setDate(genEnd.getDate() + 6);
+    document.getElementById('genStartDate').value = Utils.formatDate(genStart);
+    document.getElementById('genEndDate').value = Utils.formatDate(genEnd);
+
+    loadTasks();
+
+    async function loadTasks() {
+      var params = '';
+      var d = document.getElementById('dateFilter').value;
+      if (d) params += '&date=' + d;
+      var s = document.getElementById('statusFilter').value;
+      if (s) params += '&status=' + s;
+      params = params ? '?' + params.slice(1) : '';
+
+      try {
+        var data = await API.get('/tasks/admin-grouped' + params);
+        renderSummary(data);
+        renderGroups(data.groups);
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function renderSummary(data) {
+      var totalTasks = 0, completed = 0, overdue = 0, pending = 0;
+      (data.groups || []).forEach(function(area) {
+        area.checkpoints.forEach(function(cp) {
+          totalTasks += cp.totalCount;
+          completed += cp.completedCount;
+          overdue += cp.overdueCount;
+          pending += cp.totalCount - cp.completedCount - cp.overdueCount;
+        });
+      });
+      document.getElementById('taskSummary').innerHTML =
+        '<div class="summary-item"><span class="num primary">' + totalTasks + '</span>总任务</div>' +
+        '<div class="summary-item"><span class="num success">' + completed + '</span>已完成</div>' +
+        '<div class="summary-item"><span class="num warning">' + pending + '</span>待完成</div>' +
+        '<div class="summary-item"><span class="num danger">' + overdue + '</span>超时未检查</div>';
+    }
+
+    function renderGroups(groups) {
+      var container = document.getElementById('taskGroups');
+      if (!groups || groups.length === 0) {
+        container.innerHTML = '<div class="task-empty">暂无任务</div>';
+        return;
+      }
+
+      var html = '';
+      groups.forEach(function(area) {
+        area.checkpoints.forEach(function(cp) {
+          var pct = cp.totalCount > 0 ? Math.round(cp.completedCount / cp.totalCount * 100) : 0;
+          var fillClass = 'in-progress';
+          if (cp.completedCount === cp.totalCount) fillClass = 'all-done';
+          else if (cp.overdueCount > 0) fillClass = 'has-overdue';
+
+          var areaTag = '';
+          if (area.building || area.floor) {
+            areaTag = '<span class="area-tag">' + (area.building || '') + ' ' + (area.floor || '') + '</span>';
+          }
+
+          var statusCounts = '';
+          if (cp.overdueCount > 0) statusCounts += '<span style="color:var(--danger);font-weight:600;">' + cp.overdueCount + '超时未检查</span>';
+
+          var groupId = 'g_' + area.areaId + '_' + cp.checkpointId;
+
+          html += '<div class="task-group">';
+          html += '<div class="group-header" onclick="toggleGroup(this)">' +
+            '<div class="group-title">' + area.areaName + ' - ' + cp.checkpointName + areaTag + '</div>' +
+            '<div class="group-right">' +
+              statusCounts +
+              '<span>' + cp.completedCount + '/' + cp.totalCount + '</span>' +
+              '<span class="progress-bar"><span class="fill ' + fillClass + '" style="width:' + pct + '%"></span></span>' +
+              '<span class="arrow">&#9654;</span>' +
+            '</div>' +
+          '</div>';
+          html += '<div class="group-body" id="' + groupId + '">';
+          html += '<table class="data-table"><thead><tr>' +
+            '<th>ID</th><th>截止时间</th><th>时间窗口</th><th>状态</th><th>完成人</th><th>完成时间</th>' +
+            (isSuperAdmin ? '<th>操作</th>' : '') +
+            '</tr></thead><tbody>';
+          cp.tasks.forEach(function(t) {
+            var futureBadge = t.is_future ? ' <span style="background:#f0f0f0;color:#8c8c8c;padding:2px 6px;border-radius:10px;font-size:11px;">未激活</span>' : '';
+            var rowStyle = t.is_future ? ' style="opacity:0.6;"' : '';
+            var actionTd = isSuperAdmin ? '<td class="actions"><button class="btn btn-small btn-danger" onclick="event.stopPropagation();confirmDeleteTask(' + t.id + ')">删除</button></td>' : '';
+            html += '<tr' + rowStyle + '>' +
+              '<td>' + t.id + '</td>' +
+              '<td>' + (t.due_time || '').slice(11, 16) + '</td>' +
+              '<td>' + Utils.formatTime(t.window_start) + '-' + Utils.formatTime(t.window_end) + '</td>' +
+              '<td><span class="badge badge-' + t.status + '">' + Utils.statusText(t.status) + '</span>' + futureBadge + '</td>' +
+              '<td>' + (t.completed_by_name || '-') + '</td>' +
+              '<td>' + (t.completed_at ? t.completed_at.slice(11, 16) : '-') + '</td>' +
+              actionTd +
+            '</tr>';
+          });
+          html += '</tbody></table></div></div>';
+        });
+      });
+      container.innerHTML = html;
+    }
+
+    function toggleGroup(header) {
+      var body = header.nextElementSibling;
+      var isExpanded = body.classList.contains('show');
+      if (isExpanded) {
+        body.classList.remove('show');
+        header.classList.remove('expanded');
+      } else {
+        body.classList.add('show');
+        header.classList.add('expanded');
+      }
+    }
+
+    async function generateTasks() {
+      var startDate = document.getElementById('genStartDate').value;
+      var endDate = document.getElementById('genEndDate').value;
+      if (!startDate || !endDate) { Utils.showToast('请选择生成日期范围', 'error'); return; }
+      if (startDate > endDate) { Utils.showToast('开始日期不能晚于结束日期', 'error'); return; }
+      var diff = Math.round((new Date(endDate) - new Date(startDate)) / 86400000);
+      if (diff > 6) { Utils.showToast('最多生成7天的任务', 'error'); return; }
+      try {
+        var result = await API.post('/schedules/generate', { startDate: startDate, endDate: endDate });
+        Utils.showToast(result.message, 'success');
+        loadTasks();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function confirmDeleteTask(taskId) {
+      document.getElementById('confirmMsg').textContent = '确定要删除任务 #' + taskId + ' 吗？关联的检查记录和照片也会被删除。此操作不可撤销。';
+      document.getElementById('confirmBtn').onclick = function() { deleteTask(taskId); };
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    function confirmDeleteAll() {
+      document.getElementById('confirmMsg').textContent = '确定要删除全部任务吗？所有任务、检查记录和照片都会被永久删除。此操作不可撤销！';
+      document.getElementById('confirmBtn').onclick = function() { deleteAllTasks(); };
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    async function deleteTask(taskId) {
+      try {
+        var result = await API.del('/tasks/' + taskId);
+        Utils.showToast(result.message, 'success');
+        closeModal('confirmModal');
+        loadTasks();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteAllTasks() {
+      try {
+        var result = await API.del('/tasks/all');
+        Utils.showToast(result.message, 'success');
+        closeModal('confirmModal');
+        loadTasks();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  </script>
+</body>
+</html>

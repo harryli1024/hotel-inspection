@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排班管理 - 管理后台</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <div class="admin-content">
+      <div class="page-header"><h2>排班管理</h2></div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>排班列表</h3>
+          <button class="btn btn-primary" onclick="openCreate()">+ 新建排班</button>
+        </div>
+        <div class="card-body no-padding">
+          <table class="data-table">
+            <thead>
+              <tr><th>ID</th><th>检查点</th><th>区域</th><th>频率</th><th>时间段</th><th>工作日</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody id="schedulesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Modal -->
+  <div class="modal-overlay" id="scheduleModal">
+    <div class="modal" style="max-width:550px;">
+      <div class="modal-header">
+        <h3 id="modalTitle">新建排班</h3>
+        <button class="modal-close" onclick="closeModal('scheduleModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label>区域</label>
+          <select class="form-select" id="formArea" onchange="onAreaChange()"><option value="">请选择区域</option></select>
+        </div>
+        <div class="form-group">
+          <label>检查点 <span class="required">*</span></label>
+          <select class="form-select" id="formCheckpoint"><option value="">请先选择区域</option></select>
+        </div>
+        <div class="form-group">
+          <label>检查频率 <span class="required">*</span></label>
+          <select class="form-select" id="formFrequency">
+            <option value="30">每30分钟</option>
+            <option value="60" selected>每小时</option>
+            <option value="120">每2小时</option>
+            <option value="240">每4小时</option>
+            <option value="480">每8小时</option>
+            <option value="1440">每天一次</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>开始时间 <span class="required">*</span></label>
+            <input type="time" class="form-input" id="formStartTime" value="08:00">
+          </div>
+          <div class="form-group">
+            <label>结束时间 <span class="required">*</span></label>
+            <input type="time" class="form-input" id="formEndTime" value="22:00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>时间窗口（分钟）</label>
+          <input type="number" class="form-input" id="formWindow" value="30" min="5" max="120" placeholder="允许提前/延后的分钟数">
+        </div>
+        <div class="form-group">
+          <label>工作日</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" id="daysGroup">
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="1" checked> 一</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="2" checked> 二</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="3" checked> 三</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="4" checked> 四</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="5" checked> 五</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="6" checked> 六</label>
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="7" checked> 日</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('scheduleModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveSchedule()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/admin/layout.js"></script>
+  <script>
+    initAdminLayout('schedules');
+    loadSchedules();
+    loadFormData();
+
+    var freqMap = { 30: '每30分钟', 60: '每小时', 120: '每2小时', 240: '每4小时', 480: '每8小时', 1440: '每天' };
+    var dayNames = { 1:'一', 2:'二', 3:'三', 4:'四', 5:'五', 6:'六', 7:'日' };
+
+    async function loadFormData() {
+      try {
+        var areas = await API.get('/areas/active');
+        var sel = document.getElementById('formArea');
+        areas.forEach(function(a) { sel.innerHTML += '<option value="' + a.id + '">' + a.name + '</option>'; });
+      } catch (e) {}
+    }
+
+    async function onAreaChange() {
+      var areaId = document.getElementById('formArea').value;
+      var sel = document.getElementById('formCheckpoint');
+      sel.innerHTML = '<option value="">请选择</option>';
+      if (!areaId) return;
+      try {
+        var cps = await API.get('/areas/' + areaId + '/checkpoints');
+        cps.forEach(function(c) { sel.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>'; });
+      } catch (e) {}
+    }
+
+    async function loadSchedules() {
+      try {
+        var data = await API.get('/schedules?limit=50');
+        var tbody = document.getElementById('schedulesBody');
+        if (!data.rows || data.rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">暂无排班</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.rows.map(function(s) {
+          var days = (s.active_days||'').split(',').map(function(d) { return dayNames[d]||d; }).join(' ');
+          var statusBadge = s.status === 1 ? '<span class="badge badge-completed">启用</span>' : '<span class="badge badge-overdue">停用</span>';
+          return '<tr>' +
+            '<td>' + s.id + '</td>' +
+            '<td>' + (s.checkpoint_name||'') + '</td>' +
+            '<td>' + (s.area_name||'') + '</td>' +
+            '<td>' + (freqMap[s.frequency_minutes]||s.frequency_minutes+'分钟') + '</td>' +
+            '<td>' + s.start_time + '-' + s.end_time + '</td>' +
+            '<td>' + days + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td class="actions">' +
+              '<button class="btn btn-small btn-primary" onclick="openEdit(' + s.id + ')">编辑</button>' +
+              '<button class="btn btn-small ' + (s.status===1?'btn-danger':'btn-success') + '" onclick="toggleStatus(' + s.id + ')">' + (s.status===1?'停用':'启用') + '</button>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function openCreate() {
+      document.getElementById('modalTitle').textContent = '新建排班';
+      document.getElementById('editId').value = '';
+      document.getElementById('formArea').value = '';
+      document.getElementById('formCheckpoint').innerHTML = '<option value="">请先选择区域</option>';
+      document.getElementById('formFrequency').value = '60';
+      document.getElementById('formStartTime').value = '08:00';
+      document.getElementById('formEndTime').value = '22:00';
+      document.getElementById('formWindow').value = '30';
+      document.querySelectorAll('#daysGroup input').forEach(function(cb) { cb.checked = true; });
+      document.getElementById('scheduleModal').classList.add('show');
+    }
+
+    async function openEdit(id) {
+      try {
+        var s = await API.get('/schedules/' + id);
+        document.getElementById('modalTitle').textContent = '编辑排班';
+        document.getElementById('editId').value = id;
+        var cp = await API.get('/checkpoints/' + s.checkpoint_id);
+        document.getElementById('formArea').value = cp.area_id;
+        await onAreaChange();
+        document.getElementById('formCheckpoint').value = s.checkpoint_id;
+        document.getElementById('formFrequency').value = s.frequency_minutes;
+        document.getElementById('formStartTime').value = s.start_time;
+        document.getElementById('formEndTime').value = s.end_time;
+        document.getElementById('formWindow').value = s.window_minutes;
+        var activeDays = (s.active_days||'').split(',');
+        document.querySelectorAll('#daysGroup input').forEach(function(cb) {
+          cb.checked = activeDays.includes(cb.value);
+        });
+        document.getElementById('scheduleModal').classList.add('show');
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function saveSchedule() {
+      var checkpointId = document.getElementById('formCheckpoint').value;
+      var startTime = document.getElementById('formStartTime').value;
+      var endTime = document.getElementById('formEndTime').value;
+      var frequencyMinutes = parseInt(document.getElementById('formFrequency').value);
+
+      if (!checkpointId || !startTime || !endTime) {
+        Utils.showToast('请填写所有必填字段', 'warning');
+        return;
+      }
+
+      var activeDays = [];
+      document.querySelectorAll('#daysGroup input:checked').forEach(function(cb) { activeDays.push(cb.value); });
+
+      var data = {
+        checkpointId: parseInt(checkpointId),
+        frequencyMinutes: frequencyMinutes,
+        startTime: startTime,
+        endTime: endTime,
+        windowMinutes: parseInt(document.getElementById('formWindow').value) || 30,
+        activeDays: activeDays.join(','),
+      };
+
+      var editId = document.getElementById('editId').value;
+      try {
+        if (editId) { await API.put('/schedules/' + editId, data); }
+        else { await API.post('/schedules', data); }
+        closeModal('scheduleModal');
+        Utils.showToast('保存成功', 'success');
+        loadSchedules();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function toggleStatus(id) {
+      try {
+        var result = await API.put('/schedules/' + id + '/status');
+        Utils.showToast(result.message, 'success');
+        loadSchedules();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  </script>
+</body>
+</html>

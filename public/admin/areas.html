@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>区域管理 - 管理后台</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <div class="admin-content">
+      <div class="page-header"><h2>区域与检查点管理</h2></div>
+
+      <div class="two-panel">
+        <!-- Left: Areas -->
+        <div class="card">
+          <div class="card-header">
+            <h3>区域列表</h3>
+            <button class="btn btn-small btn-primary" onclick="openCreateArea()">+ 添加</button>
+          </div>
+          <div class="card-body no-padding">
+            <div class="panel-list" id="areaList"></div>
+          </div>
+        </div>
+
+        <!-- Right: Checkpoints -->
+        <div class="card">
+          <div class="card-header">
+            <h3 id="cpTitle">选择一个区域查看检查点</h3>
+            <button class="btn btn-small btn-primary" id="addCpBtn" onclick="openCreateCheckpoint()" style="display:none;">+ 添加检查点</button>
+          </div>
+          <div class="card-body no-padding">
+            <table class="data-table" id="cpTable" style="display:none;">
+              <thead><tr><th>排序</th><th>名称</th><th>描述</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody id="cpBody"></tbody>
+            </table>
+            <div id="cpEmpty" class="empty-state">请从左侧选择一个区域</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Area Modal -->
+  <div class="modal-overlay" id="areaModal">
+    <div class="modal" style="max-width:450px;">
+      <div class="modal-header">
+        <h3 id="areaModalTitle">添加区域</h3>
+        <button class="modal-close" onclick="closeModal('areaModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="areaEditId">
+        <div class="form-group">
+          <label>区域名称 <span class="required">*</span></label>
+          <input type="text" class="form-input" id="areaName" placeholder="如：1楼男厕">
+        </div>
+        <div class="form-group">
+          <label>楼层</label>
+          <input type="text" class="form-input" id="areaFloor" placeholder="如：1F">
+        </div>
+        <div class="form-group">
+          <label>建筑</label>
+          <input type="text" class="form-input" id="areaBuilding" placeholder="如：主楼">
+        </div>
+        <div class="form-group">
+          <label>描述</label>
+          <textarea class="form-textarea" id="areaDesc" rows="2" placeholder="选填"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('areaModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveArea()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkpoint Modal -->
+  <div class="modal-overlay" id="cpModal">
+    <div class="modal" style="max-width:450px;">
+      <div class="modal-header">
+        <h3 id="cpModalTitle">添加检查点</h3>
+        <button class="modal-close" onclick="closeModal('cpModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cpEditId">
+        <div class="form-group">
+          <label>检查点名称 <span class="required">*</span></label>
+          <input type="text" class="form-input" id="cpName" placeholder="如：1号坑位">
+        </div>
+        <div class="form-group">
+          <label>描述</label>
+          <textarea class="form-textarea" id="cpDesc" rows="2" placeholder="选填"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('cpModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveCheckpoint()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3>确认删除</h3>
+        <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMsg" style="color:var(--danger);"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('confirmModal')">取消</button>
+        <button class="btn btn-danger" id="confirmBtn">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/admin/layout.js"></script>
+  <script>
+    initAdminLayout('areas');
+    var selectedAreaId = null;
+    var user = AUTH.getUser();
+    var isSuperAdmin = user.role === 'super_admin';
+    loadAreas();
+
+    async function loadAreas() {
+      try {
+        var areas = await API.get('/areas');
+        var html = '';
+        if (areas.length === 0) {
+          html = '<div class="empty-state">暂无区域</div>';
+        } else {
+          areas.forEach(function(a) {
+            var cls = a.id === selectedAreaId ? 'panel-list-item active' : 'panel-list-item';
+            var deleteLink = isSuperAdmin ? ' | <a href="#" onclick="event.stopPropagation();confirmDeleteArea(' + a.id + ',\'' + a.name.replace(/'/g,"\\'") + '\')" style="color:var(--danger)">删除</a>' : '';
+            html += '<div class="' + cls + '" onclick="selectArea(' + a.id + ')">' +
+              '<div class="item-name">' + a.name + '</div>' +
+              '<div class="item-sub">' + (a.building||'') + ' ' + (a.floor||'') + ' | 检查点: ' + (a.checkpoint_count||0) +
+              ' | <a href="#" onclick="event.stopPropagation();openEditArea(' + a.id + ')">编辑</a>' +
+              ' | <a href="#" onclick="event.stopPropagation();toggleAreaStatus(' + a.id + ')" style="color:' + (a.status===1?'var(--danger)':'var(--success)') + '">' + (a.status===1?'停用':'启用') + '</a>' +
+              deleteLink +
+              '</div></div>';
+          });
+        }
+        document.getElementById('areaList').innerHTML = html;
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function selectArea(id) {
+      selectedAreaId = id;
+      loadAreas();
+      document.getElementById('addCpBtn').style.display = '';
+      document.getElementById('cpTable').style.display = '';
+      document.getElementById('cpEmpty').style.display = 'none';
+
+      try {
+        var area = await API.get('/areas/' + id);
+        document.getElementById('cpTitle').textContent = area.name + ' - 检查点';
+        var cps = area.checkpoints || [];
+        var tbody = document.getElementById('cpBody');
+        if (cps.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">暂无检查点</td></tr>';
+        } else {
+          tbody.innerHTML = cps.map(function(c) {
+            var statusBadge = c.status === 1 ? '<span class="badge badge-completed">启用</span>' : '<span class="badge badge-overdue">停用</span>';
+            var deleteBtn = isSuperAdmin ? '<button class="btn btn-small btn-danger" onclick="confirmDeleteCp(' + c.id + ',\'' + c.name.replace(/'/g,"\\'") + '\')">删除</button>' : '';
+            return '<tr><td>' + c.sort_order + '</td><td>' + c.name + '</td><td>' + (c.description||'-') + '</td><td>' + statusBadge + '</td>' +
+              '<td class="actions">' +
+                '<button class="btn btn-small btn-default" onclick="openEditCp(' + c.id + ',\'' + c.name.replace(/'/g,"\\'") + '\',\'' + (c.description||'').replace(/'/g,"\\'") + '\')">编辑</button>' +
+                '<button class="btn btn-small ' + (c.status===1?'btn-danger':'btn-success') + '" onclick="toggleCpStatus(' + c.id + ')">' + (c.status===1?'停用':'启用') + '</button>' +
+                deleteBtn +
+              '</td></tr>';
+          }).join('');
+        }
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function openCreateArea() {
+      document.getElementById('areaModalTitle').textContent = '添加区域';
+      document.getElementById('areaEditId').value = '';
+      document.getElementById('areaName').value = '';
+      document.getElementById('areaFloor').value = '';
+      document.getElementById('areaBuilding').value = '';
+      document.getElementById('areaDesc').value = '';
+      document.getElementById('areaModal').classList.add('show');
+    }
+
+    async function openEditArea(id) {
+      try {
+        var a = await API.get('/areas/' + id);
+        document.getElementById('areaModalTitle').textContent = '编辑区域';
+        document.getElementById('areaEditId').value = id;
+        document.getElementById('areaName').value = a.name;
+        document.getElementById('areaFloor').value = a.floor || '';
+        document.getElementById('areaBuilding').value = a.building || '';
+        document.getElementById('areaDesc').value = a.description || '';
+        document.getElementById('areaModal').classList.add('show');
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function saveArea() {
+      var name = document.getElementById('areaName').value.trim();
+      if (!name) { Utils.showToast('请输入区域名称', 'warning'); return; }
+      var data = {
+        name: name,
+        floor: document.getElementById('areaFloor').value.trim(),
+        building: document.getElementById('areaBuilding').value.trim(),
+        description: document.getElementById('areaDesc').value.trim(),
+      };
+      var editId = document.getElementById('areaEditId').value;
+      try {
+        if (editId) { await API.put('/areas/' + editId, data); }
+        else { await API.post('/areas', data); }
+        closeModal('areaModal');
+        Utils.showToast('保存成功', 'success');
+        loadAreas();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function toggleAreaStatus(id) {
+      try {
+        var result = await API.put('/areas/' + id + '/status');
+        Utils.showToast(result.message, 'success');
+        loadAreas();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function confirmDeleteArea(id, name) {
+      document.getElementById('confirmMsg').textContent = '确定要删除区域"' + name + '"吗？将同时删除其下所有检查点、排班和任务。此操作不可撤销。';
+      document.getElementById('confirmBtn').onclick = function() { deleteArea(id); };
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    async function deleteArea(id) {
+      try {
+        var result = await API.del('/areas/' + id);
+        Utils.showToast(result.message, 'success');
+        closeModal('confirmModal');
+        selectedAreaId = null;
+        document.getElementById('cpTable').style.display = 'none';
+        document.getElementById('cpEmpty').style.display = '';
+        document.getElementById('cpTitle').textContent = '选择一个区域查看检查点';
+        document.getElementById('addCpBtn').style.display = 'none';
+        loadAreas();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function openCreateCheckpoint() {
+      document.getElementById('cpModalTitle').textContent = '添加检查点';
+      document.getElementById('cpEditId').value = '';
+      document.getElementById('cpName').value = '';
+      document.getElementById('cpDesc').value = '';
+      document.getElementById('cpModal').classList.add('show');
+    }
+
+    function openEditCp(id, name, desc) {
+      document.getElementById('cpModalTitle').textContent = '编辑检查点';
+      document.getElementById('cpEditId').value = id;
+      document.getElementById('cpName').value = name;
+      document.getElementById('cpDesc').value = desc;
+      document.getElementById('cpModal').classList.add('show');
+    }
+
+    async function saveCheckpoint() {
+      var name = document.getElementById('cpName').value.trim();
+      if (!name) { Utils.showToast('请输入检查点名称', 'warning'); return; }
+      var data = { name: name, description: document.getElementById('cpDesc').value.trim() };
+      var editId = document.getElementById('cpEditId').value;
+      try {
+        if (editId) { await API.put('/checkpoints/' + editId, data); }
+        else { await API.post('/areas/' + selectedAreaId + '/checkpoints', data); }
+        closeModal('cpModal');
+        Utils.showToast('保存成功', 'success');
+        selectArea(selectedAreaId);
+        loadAreas();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function toggleCpStatus(id) {
+      try {
+        var result = await API.put('/checkpoints/' + id + '/status');
+        Utils.showToast(result.message, 'success');
+        selectArea(selectedAreaId);
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function confirmDeleteCp(id, name) {
+      document.getElementById('confirmMsg').textContent = '确定要删除检查点"' + name + '"吗？将同时删除其相关排班和任务。此操作不可撤销。';
+      document.getElementById('confirmBtn').onclick = function() { deleteCp(id); };
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    async function deleteCp(id) {
+      try {
+        var result = await API.del('/areas/' + selectedAreaId + '/checkpoints/' + id);
+        Utils.showToast(result.message, 'success');
+        closeModal('confirmModal');
+        selectArea(selectedAreaId);
+        loadAreas();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  </script>
+</body>
+</html>

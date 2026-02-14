@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>执行检查 - 酒店巡检</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+  <div class="mobile-page" style="padding-bottom:70px;">
+    <div class="mobile-header">
+      <a href="/mobile/tasks.html" style="color:#fff;font-size:15px;">&larr; 返回</a>
+      <h1>执行检查</h1>
+      <div></div>
+    </div>
+
+    <div class="inspect-header" id="taskInfo">
+      <div>加载中...</div>
+    </div>
+
+    <div class="inspect-section">
+      <h3>拍照记录 <span style="color:var(--danger);font-size:12px;">* 至少1张</span></h3>
+      <div class="photo-grid" id="photoGrid">
+        <div class="photo-add" onclick="openCamera()">
+          <span class="icon">&#128247;</span>
+          <span>拍照</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="inspect-section" id="formSection">
+      <h3>检查项目</h3>
+      <div id="inspectForm"></div>
+    </div>
+
+    <div class="submit-bar">
+      <button class="btn btn-primary btn-block" id="submitBtn" onclick="submitInspection()">提交检查</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/location.js"></script>
+  <script src="/js/camera.js"></script>
+  <script>
+    if (!AUTH.requireAuth(['staff', 'admin', 'super_admin'])) throw new Error('no auth');
+
+    var taskId = Utils.getQueryParam('taskId');
+    if (!taskId) { location.href = '/mobile/tasks.html'; throw new Error('no taskId'); }
+
+    var task = null;
+    var camera = new CameraCapture();
+    var formValues = {};
+
+    loadTask();
+
+    async function loadTask() {
+      try {
+        task = await API.get('/tasks/' + taskId);
+        renderTaskInfo();
+        renderForm();
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+        setTimeout(function() { location.href = '/mobile/tasks.html'; }, 1500);
+      }
+    }
+
+    function renderTaskInfo() {
+      var html = '<div class="location">' + (task.area_name || '') + ' - ' + (task.checkpoint_name || '') + '</div>' +
+        '<div class="info">截止时间: ' + Utils.formatTime(task.due_time) +
+        ' &nbsp; 窗口: ' + Utils.formatTime(task.window_start) + ' - ' + Utils.formatTime(task.window_end) + '</div>';
+      document.getElementById('taskInfo').innerHTML = html;
+    }
+
+    // Fixed inspection items (must match server/config/inspectItems.js)
+    var INSPECT_ITEMS = [
+      { id: 'cleanliness', name: '卫生状况', inputType: 'radio', options: ['干净', '脏污'], required: true },
+      { id: 'supplies', name: '纸巾/洗手液', inputType: 'radio', options: ['充足', '缺少'], required: true },
+      { id: 'equipment', name: '设备状况', inputType: 'radio', options: ['正常', '损坏'], required: true },
+      { id: 'notes', name: '备注', inputType: 'text', options: null, required: false },
+    ];
+
+    function renderForm() {
+      var html = '';
+      INSPECT_ITEMS.forEach(function(item) {
+        var required = item.required ? '<span class="required">*</span>' : '';
+        html += '<div class="form-item" data-item-id="' + item.id + '" data-required="' + item.required + '">';
+        html += '<div class="item-label">' + item.name + required + '</div>';
+
+        if (item.inputType === 'radio') {
+          html += '<div class="radio-group">';
+          item.options.forEach(function(opt) {
+            html += '<div class="radio-option" data-value="' + opt + '" onclick="selectRadio(this, \'' + item.id + '\')">' + opt + '</div>';
+          });
+          html += '</div>';
+        } else {
+          html += '<textarea class="form-textarea" onchange="formValues[\'' + item.id + '\']=this.value" placeholder="请输入"></textarea>';
+        }
+
+        html += '</div>';
+      });
+      document.getElementById('inspectForm').innerHTML = html;
+    }
+
+    function selectRadio(el, itemId) {
+      el.parentElement.querySelectorAll('.radio-option').forEach(function(o) { o.classList.remove('selected'); });
+      el.classList.add('selected');
+      formValues[itemId] = el.getAttribute('data-value');
+    }
+
+    async function openCamera() {
+      try {
+        await camera.open();
+      } catch (err) {
+        Utils.showToast('摄像头启动失败，请确保已授予权限', 'error');
+      }
+
+      // When camera closes, refresh photo grid
+      var checkClose = setInterval(function() {
+        if (!document.querySelector('.camera-overlay')) {
+          clearInterval(checkClose);
+          renderPhotos();
+        }
+      }, 200);
+    }
+
+    function renderPhotos() {
+      var photos = camera.getPhotos();
+      var grid = document.getElementById('photoGrid');
+      var html = '';
+
+      photos.forEach(function(photo, index) {
+        html += '<div class="photo-item">' +
+          '<img src="' + photo.dataUrl + '">' +
+          '<button class="photo-remove" onclick="removePhoto(' + index + ')">x</button>' +
+        '</div>';
+      });
+
+      html += '<div class="photo-add" onclick="openCamera()">' +
+        '<span class="icon">&#128247;</span>' +
+        '<span>拍照 (' + photos.length + ')</span>' +
+      '</div>';
+
+      grid.innerHTML = html;
+    }
+
+    function removePhoto(index) {
+      camera.removePhoto(index);
+      renderPhotos();
+    }
+
+    function validateForm() {
+      for (var i = 0; i < INSPECT_ITEMS.length; i++) {
+        var item = INSPECT_ITEMS[i];
+        if (item.required && (!formValues[item.id] || formValues[item.id] === '')) {
+          Utils.showToast('请填写: ' + item.name, 'warning');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    async function submitInspection() {
+      var photos = camera.getPhotos();
+      if (photos.length === 0) {
+        Utils.showToast('请至少拍摄一张照片', 'warning');
+        return;
+      }
+      if (!validateForm()) return;
+
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      Utils.showLoading('正在提交...');
+
+      try {
+        var formData = new FormData();
+        formData.append('taskId', taskId);
+
+        var photosMeta = [];
+        for (var i = 0; i < photos.length; i++) {
+          formData.append('photos', photos[i].blob, 'photo_' + i + '.jpg');
+          photosMeta.push({
+            takenAt: photos[i].takenAt,
+            watermarkInfo: photos[i].watermarkInfo,
+          });
+        }
+        formData.append('photosMeta', JSON.stringify(photosMeta));
+
+        // Build items array from fixed inspect items
+        var items = [];
+        INSPECT_ITEMS.forEach(function(item) {
+          items.push({
+            itemKey: item.id,
+            itemName: item.name,
+            inputType: item.inputType,
+            value: formValues[item.id] || '',
+          });
+        });
+        formData.append('items', JSON.stringify(items));
+
+        var gps = await GPS.getCurrentPosition();
+        formData.append('gpsLat', gps.lat || '');
+        formData.append('gpsLng', gps.lng || '');
+        formData.append('gpsAccuracy', gps.accuracy || '');
+        formData.append('deviceInfo', navigator.userAgent);
+
+        var result = await API.postForm('/inspections', formData);
+
+        Utils.hideLoading();
+        Utils.showToast(result.message || '提交成功', result.complianceStatus === 'on_time' ? 'success' : 'warning');
+        setTimeout(function() { location.href = '/mobile/tasks.html'; }, 2000);
+      } catch (err) {
+        Utils.hideLoading();
+        Utils.showToast(err.message, 'error');
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

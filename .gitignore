@@ -1,0 +1,7 @@
+node_modules/
+server/uploads/photos/
+database/*.db
+database/*.db-wal
+database/*.db-shm
+.env
+.DS_Store

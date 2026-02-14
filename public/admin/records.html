@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>巡检记录 - 管理后台</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <div class="admin-content">
+      <div class="page-header"><h2>巡检记录</h2></div>
+
+      <div class="card">
+        <div class="card-body">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label>开始日期</label>
+              <input type="date" class="form-input" id="startDate">
+            </div>
+            <div class="form-group">
+              <label>结束日期</label>
+              <input type="date" class="form-input" id="endDate">
+            </div>
+            <div class="form-group">
+              <label>检查员</label>
+              <select class="form-select" id="inspectorFilter"><option value="">全部</option></select>
+            </div>
+            <div class="form-group">
+              <label>区域</label>
+              <select class="form-select" id="areaFilter" onchange="loadCheckpoints()"><option value="">全部</option></select>
+            </div>
+            <div class="form-group">
+              <label>检查点</label>
+              <select class="form-select" id="checkpointFilter"><option value="">全部</option></select>
+            </div>
+            <div class="form-group">
+              <label>合规状态</label>
+              <select class="form-select" id="complianceFilter">
+                <option value="">全部</option>
+                <option value="on_time">按时</option>
+                <option value="anomaly">异常</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>审核状态</label>
+              <select class="form-select" id="reviewFilter">
+                <option value="">全部</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="punished">已处罚</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <button class="btn btn-primary" onclick="loadRecords()">搜索</button>
+              <button class="btn btn-default" onclick="resetFilters()">重置</button>
+              <button class="btn btn-success" onclick="exportExcel()">导出Excel</button>
+            </div>
+          </div>
+
+          <table class="data-table">
+            <thead>
+              <tr><th>ID</th><th>检查点</th><th>区域</th><th>检查员</th><th>提交时间</th><th>合规状态</th><th>审核</th><th>照片</th><th>操作</th></tr>
+            </thead>
+            <tbody id="recordsBody"></tbody>
+          </table>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal" style="max-width:700px;">
+      <div class="modal-header">
+        <h3>巡检详情</h3>
+        <button class="modal-close" onclick="closeModal('detailModal')">&times;</button>
+      </div>
+      <div class="modal-body" id="detailContent"></div>
+    </div>
+  </div>
+
+  <!-- Photo Viewer -->
+  <div class="photo-viewer" id="photoViewer" onclick="this.classList.remove('show')">
+    <img id="photoViewerImg" src="">
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/admin/layout.js"></script>
+  <script>
+    initAdminLayout('records');
+
+    var currentPage = 1;
+    var today = Utils.getToday();
+    document.getElementById('startDate').value = today;
+    document.getElementById('endDate').value = today;
+
+    function complianceBadge(s) {
+      if (s === 'on_time') return '<span class="badge badge-completed">按时</span>';
+      if (s === 'anomaly') return '<span style="background:#dc3545;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">异常</span>';
+      return s || '';
+    }
+
+    function reviewBadge(s) {
+      if (s === 'approved') return '<span style="background:#52c41a;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">已通过</span>';
+      if (s === 'punished') return '<span style="background:#dc3545;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">已处罚</span>';
+      return '<span style="background:#faad14;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">待审核</span>';
+    }
+
+    loadFilters();
+    loadRecords();
+
+    async function loadFilters() {
+      try {
+        var [staff, areas] = await Promise.all([
+          API.get('/users?role=staff&limit=100'),
+          API.get('/areas/active'),
+        ]);
+        var sel1 = document.getElementById('inspectorFilter');
+        (staff.rows || []).forEach(function(u) {
+          sel1.innerHTML += '<option value="' + u.id + '">' + u.real_name + '</option>';
+        });
+        var sel2 = document.getElementById('areaFilter');
+        areas.forEach(function(a) {
+          sel2.innerHTML += '<option value="' + a.id + '">' + a.name + '</option>';
+        });
+      } catch (e) {}
+    }
+
+    async function loadCheckpoints() {
+      var areaId = document.getElementById('areaFilter').value;
+      var sel = document.getElementById('checkpointFilter');
+      sel.innerHTML = '<option value="">全部</option>';
+      if (!areaId) return;
+      try {
+        var cps = await API.get('/areas/' + areaId + '/checkpoints');
+        cps.forEach(function(c) {
+          sel.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
+        });
+      } catch (e) {}
+    }
+
+    async function loadRecords(page) {
+      currentPage = page || 1;
+      var params = 'page=' + currentPage + '&limit=15';
+      var s = document.getElementById('startDate').value;
+      var e = document.getElementById('endDate').value;
+      if (s) params += '&startDate=' + s;
+      if (e) params += '&endDate=' + e;
+      var insp = document.getElementById('inspectorFilter').value;
+      if (insp) params += '&inspectorId=' + insp;
+      var area = document.getElementById('areaFilter').value;
+      if (area) params += '&areaId=' + area;
+      var cp = document.getElementById('checkpointFilter').value;
+      if (cp) params += '&checkpointId=' + cp;
+      var comp = document.getElementById('complianceFilter').value;
+      if (comp) params += '&complianceStatus=' + comp;
+      var rv = document.getElementById('reviewFilter').value;
+      if (rv) params += '&reviewStatus=' + rv;
+
+      try {
+        var data = await API.get('/inspections?' + params);
+        var tbody = document.getElementById('recordsBody');
+        if (!data.rows || data.rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-light)">暂无记录</td></tr>';
+        } else {
+          tbody.innerHTML = data.rows.map(function(r) {
+            var rowStyle = r.compliance_status === 'anomaly' ? ' style="background:#fff5f5;"' : '';
+            return '<tr' + rowStyle + '>' +
+              '<td>' + r.id + '</td>' +
+              '<td>' + (r.checkpoint_name||'') + '</td>' +
+              '<td>' + (r.area_name||'') + '</td>' +
+              '<td>' + (r.inspector_name||'') + '</td>' +
+              '<td>' + r.submitted_at + '</td>' +
+              '<td>' + complianceBadge(r.compliance_status) + '</td>' +
+              '<td>' + reviewBadge(r.review_status) + '</td>' +
+              '<td>' + (r.photo_count||0) + '</td>' +
+              '<td class="actions"><button class="btn btn-small btn-primary" onclick="viewDetail(' + r.id + ')">查看</button></td>' +
+            '</tr>';
+          }).join('');
+        }
+        renderPagination(data.total, data.page, data.limit);
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function renderPagination(total, page, limit) {
+      var pages = Math.ceil(total / limit);
+      var html = '<span class="page-info">共 ' + total + ' 条</span>';
+      if (page > 1) html += '<button class="btn btn-small btn-default" onclick="loadRecords(' + (page-1) + ')">上一页</button>';
+      html += '<span class="page-info">' + page + '/' + pages + '</span>';
+      if (page < pages) html += '<button class="btn btn-small btn-default" onclick="loadRecords(' + (page+1) + ')">下一页</button>';
+      document.getElementById('pagination').innerHTML = html;
+    }
+
+    function resetFilters() {
+      document.getElementById('startDate').value = today;
+      document.getElementById('endDate').value = today;
+      document.getElementById('inspectorFilter').value = '';
+      document.getElementById('areaFilter').value = '';
+      document.getElementById('checkpointFilter').innerHTML = '<option value="">全部</option>';
+      document.getElementById('complianceFilter').value = '';
+      document.getElementById('reviewFilter').value = '';
+      loadRecords();
+    }
+
+    async function viewDetail(id) {
+      try {
+        var record = await API.get('/inspections/' + id);
+        var html = '<div class="detail-grid">' +
+          '<div class="detail-item"><div class="label">检查点</div><div class="value">' + (record.area_name||'') + ' - ' + (record.checkpoint_name||'') + '</div></div>' +
+          '<div class="detail-item"><div class="label">检查员</div><div class="value">' + (record.inspector_name||'') + '</div></div>' +
+          '<div class="detail-item"><div class="label">提交时间</div><div class="value">' + record.submitted_at + '</div></div>' +
+          '<div class="detail-item"><div class="label">合规状态</div><div class="value">' + complianceBadge(record.compliance_status) + '</div></div>' +
+          '<div class="detail-item"><div class="label">任务时间窗口</div><div class="value">' + (record.task_window_start ? Utils.formatTime(record.task_window_start) + ' - ' + Utils.formatTime(record.task_window_end) : '无') + '</div></div>' +
+        '</div>';
+
+        // Items
+        html += '<h4 style="margin:16px 0 8px;">检查项</h4>';
+        (record.items || []).forEach(function(item) {
+          var isAnomaly = item.value === 'fail' || item.value === 'dirty' || item.value === 'damaged' || item.value === 'missing';
+          html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">' +
+            '<span>' + item.item_name + '</span>' +
+            '<span style="' + (isAnomaly ? 'color:var(--danger);font-weight:600' : '') + '">' + (item.value||'-') + '</span>' +
+          '</div>';
+        });
+
+        // Photos
+        html += '<h4 style="margin:16px 0 8px;">照片</h4><div class="detail-photos">';
+        var tk = API.getToken();
+        (record.photos || []).forEach(function(photo) {
+          html += '<img src="/api/inspections/photos/' + photo.file_path + '?token=' + tk + '" onclick="viewPhoto(this.src)">';
+        });
+        html += '</div>';
+
+        // Review section
+        html += '<h4 style="margin:16px 0 8px;">审核</h4>';
+        html += '<div style="padding:8px 0;">';
+        html += '<div style="margin-bottom:8px;">当前状态：' + reviewBadge(record.review_status) + '</div>';
+        if (record.reviewer_name) {
+          html += '<div style="margin-bottom:8px;font-size:13px;color:var(--text-light);">审核人：' + record.reviewer_name + '  ' + (record.reviewed_at || '') + '</div>';
+        }
+        if (record.review_comment) {
+          html += '<div style="margin-bottom:8px;font-size:13px;color:var(--text-light);">审核备注：' + record.review_comment + '</div>';
+        }
+        html += '<div style="margin-top:8px;">' +
+          '<textarea id="reviewComment" class="form-input" placeholder="审核备注（可选）" rows="2" style="width:100%;margin-bottom:8px;"></textarea>' +
+          '<button class="btn btn-success" onclick="submitReview(' + record.id + ', \'approved\')" style="margin-right:8px;">通过</button>' +
+          '<button class="btn btn-danger" onclick="submitReview(' + record.id + ', \'punished\')">处罚</button>' +
+        '</div>';
+        html += '</div>';
+
+        document.getElementById('detailContent').innerHTML = html;
+        document.getElementById('detailModal').classList.add('show');
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    function viewPhoto(src) {
+      document.getElementById('photoViewerImg').src = src;
+      document.getElementById('photoViewer').classList.add('show');
+    }
+
+    async function submitReview(recordId, reviewStatus) {
+      var comment = document.getElementById('reviewComment').value.trim();
+      try {
+        var result = await API.put('/inspections/' + recordId + '/review', {
+          reviewStatus: reviewStatus,
+          reviewComment: comment,
+        });
+        Utils.showToast(result.message, 'success');
+        closeModal('detailModal');
+        loadRecords(currentPage);
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function exportExcel() {
+      var params = '';
+      var s = document.getElementById('startDate').value;
+      var e = document.getElementById('endDate').value;
+      if (s) params += '&startDate=' + s;
+      if (e) params += '&endDate=' + e;
+      var insp = document.getElementById('inspectorFilter').value;
+      if (insp) params += '&inspectorId=' + insp;
+      params = params ? '?' + params.slice(1) : '';
+
+      try {
+        Utils.showLoading('正在导出...');
+        var blob = await API.get('/export/inspections' + params);
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'inspection_' + Utils.getToday() + '.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+        Utils.hideLoading();
+      } catch (err) {
+        Utils.hideLoading();
+        Utils.showToast(err.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据概览 - 管理后台</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <div class="admin-content">
+      <div class="page-header">
+        <h2>数据概览</h2>
+        <div class="page-desc">今日巡检任务执行情况一览</div>
+      </div>
+
+      <div class="dashboard-stats" id="statCards"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="card">
+          <div class="card-header"><h3>近7天完成情况</h3></div>
+          <div class="card-body">
+            <div class="bar-chart" id="weekChart"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>最近巡检记录</h3></div>
+          <div class="card-body no-padding">
+            <table class="data-table" id="recentTable">
+              <thead><tr><th>检查点</th><th>检查员</th><th>时间</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/admin/layout.js"></script>
+  <script>
+    initAdminLayout('dashboard');
+    loadDashboard();
+
+    async function loadDashboard() {
+      try {
+        var [stats, anomaly, records] = await Promise.all([
+          API.get('/tasks/stats'),
+          API.get('/inspections/anomaly-count'),
+          API.get('/inspections?limit=10'),
+        ]);
+
+        var today = stats.today;
+        var rate = today.total > 0 ? Math.round((today.completed / today.total) * 100) : 0;
+
+        document.getElementById('statCards').innerHTML =
+          '<div class="dash-card"><div class="card-title">今日任务总数</div><div class="card-value primary">' + (today.total||0) + '</div></div>' +
+          '<div class="dash-card"><div class="card-title">已完成</div><div class="card-value success">' + (today.completed||0) + '</div><div class="card-sub">完成率 ' + rate + '%</div></div>' +
+          '<div class="dash-card"><div class="card-title">超时未检查</div><div class="card-value danger">' + (today.overdue||0) + '</div></div>' +
+          '<div class="dash-card"><div class="card-title">检查项异常</div><div class="card-value warning">' + (anomaly.itemAnomaly||0) + '</div><div class="card-sub">脏污/损坏/缺失</div></div>' +
+          '<div class="dash-card" style="border-left:3px solid var(--danger);"><div class="card-title">合规异常</div><div class="card-value danger">' + (anomaly.complianceAnomaly||0) + '</div><div class="card-sub">可疑提交</div></div>';
+
+        // Weekly chart
+        var dailyStats = stats.dailyStats || [];
+        var maxTotal = Math.max.apply(null, dailyStats.map(function(d) { return d.total; }).concat([1]));
+        var chartHtml = '';
+        dailyStats.forEach(function(d) {
+          var h = Math.round((d.completed / maxTotal) * 160);
+          chartHtml += '<div class="bar-item">' +
+            '<div class="bar-value">' + d.completed + '/' + d.total + '</div>' +
+            '<div class="bar-fill" style="height:' + Math.max(h, 2) + 'px;"></div>' +
+            '<div class="bar-label">' + d.date.slice(5) + '</div>' +
+          '</div>';
+        });
+        document.getElementById('weekChart').innerHTML = chartHtml;
+
+        // Recent records
+        var tbody = document.querySelector('#recentTable tbody');
+        var rows = records.rows || [];
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-light)">暂无记录</td></tr>';
+        } else {
+          tbody.innerHTML = rows.map(function(r) {
+            return '<tr><td>' + (r.checkpoint_name||'') + '</td><td>' + (r.inspector_name||'') + '</td><td>' + r.submitted_at + '</td></tr>';
+          }).join('');
+        }
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

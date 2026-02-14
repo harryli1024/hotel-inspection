@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>个人中心 - 酒店巡检</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+  <div class="mobile-page">
+    <div class="profile-header">
+      <div class="avatar" id="avatar"></div>
+      <div class="name" id="userName"></div>
+      <div class="role" id="userRole"></div>
+    </div>
+
+    <div class="progress-section" id="progressSection"></div>
+
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="section-title">最近记录</div>
+    <div class="record-list" id="recordList"></div>
+
+    <div class="profile-actions">
+      <button class="btn btn-default btn-block" onclick="changePassword()">修改密码</button>
+      <button class="btn btn-danger btn-block" onclick="AUTH.logout()">退出登录</button>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="/mobile/tasks.html">
+      <span class="nav-icon">&#9745;</span>
+      <span>任务</span>
+    </a>
+    <a href="/mobile/profile.html" class="active">
+      <span class="nav-icon">&#9786;</span>
+      <span>我的</span>
+    </a>
+  </nav>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    if (!AUTH.requireAuth()) throw new Error('no auth');
+
+    var user = AUTH.getUser();
+    document.getElementById('avatar').textContent = (user.realName || '').charAt(0);
+    document.getElementById('userName').textContent = user.realName;
+    var roleMap = { staff: '接待员', admin: '管理员', super_admin: '超级管理员' };
+    document.getElementById('userRole').textContent = roleMap[user.role] || user.role;
+
+    loadStats();
+
+    async function loadStats() {
+      try {
+        var data = await API.get('/users/me/stats');
+        renderProgress(data.stats);
+        renderStats(data.stats);
+        renderRecords(data.recentRecords);
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    function renderProgress(stats) {
+      var total = stats.today.total;
+      var completed = stats.today.completed;
+      var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      document.getElementById('progressSection').innerHTML =
+        '<div class="section-title" style="padding:0 0 8px;">今日进度: ' + completed + '/' + total + '</div>' +
+        '<div class="progress-bar-wrapper">' +
+          '<div class="progress-bar-fill" style="width:' + pct + '%;"></div>' +
+        '</div>';
+    }
+
+    function renderStats(stats) {
+      document.getElementById('statsGrid').innerHTML =
+        '<div class="stat-card"><div class="stat-value">' + (stats.week.completed||0) + '</div><div class="stat-label">本周检查次数</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + (stats.month.completed||0) + '</div><div class="stat-label">本月检查次数</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + stats.onTimeRate + '%</div><div class="stat-label">按时完成率</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + stats.totalCompleted + '</div><div class="stat-label">累计检查次数</div></div>';
+    }
+
+    function renderRecords(records) {
+      var container = document.getElementById('recordList');
+      if (!records || records.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无记录</div>';
+        return;
+      }
+
+      var html = '';
+      records.forEach(function(r) {
+        html += '<div class="record-item">' +
+          '<div class="record-location">' + (r.area_name || '') + ' - ' + (r.checkpoint_name || '') + '</div>' +
+          '<div class="record-time">' + r.submitted_at + '</div>' +
+        '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    function changePassword() {
+      var newPwd = prompt('请输入新密码（至少6位）:');
+      if (!newPwd) return;
+      if (newPwd.length < 6) {
+        Utils.showToast('密码至少6位', 'warning');
+        return;
+      }
+      API.put('/users/' + user.id + '/password', { password: newPwd })
+        .then(function() { Utils.showToast('密码修改成功', 'success'); })
+        .catch(function(err) { Utils.showToast(err.message, 'error'); });
+    }
+  </script>
+</body>
+</html>

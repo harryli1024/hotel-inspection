@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(timeout 5 node:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(export:*)",
+      "Bash(find:*)",
+      "Bash(pkill:*)"
+    ]
+  }
+}
