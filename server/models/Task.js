@@ -220,15 +220,24 @@ const Task = {
   },
 
   batchCreate: db.transaction((tasks) => {
+    const check = db.prepare(
+      'SELECT 1 FROM inspection_tasks WHERE schedule_id = ? AND due_time = ?'
+    );
     const stmt = db.prepare(`
       INSERT INTO inspection_tasks
         (schedule_id, checkpoint_id, due_time, window_start, window_end)
       VALUES (?, ?, ?, ?, ?)
     `);
 
+    let created = 0;
     for (const t of tasks) {
-      stmt.run(t.scheduleId, t.checkpointId, t.dueTime, t.windowStart, t.windowEnd);
+      // Dedup check inside transaction to prevent concurrent duplicate generation
+      if (!check.get(t.scheduleId, t.dueTime)) {
+        stmt.run(t.scheduleId, t.checkpointId, t.dueTime, t.windowStart, t.windowEnd);
+        created++;
+      }
     }
+    return created;
   }),
 
   existsForScheduleAndTime(scheduleId, dueTime) {

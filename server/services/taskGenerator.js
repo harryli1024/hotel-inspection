@@ -80,10 +80,10 @@ function generateTasks(startDate, endDate) {
   }
 
   if (tasksToCreate.length > 0) {
-    Task.batchCreate(tasksToCreate);
+    return Task.batchCreate(tasksToCreate);
   }
 
-  return tasksToCreate.length;
+  return 0;
 }
 
 module.exports = { generateTasks };

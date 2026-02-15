@@ -64,7 +64,12 @@ router.put('/:id/status', (req, res) => {
 });
 
 // POST /api/schedules/generate - Manual trigger: generate tasks for date range
+let _generating = false;
 router.post('/generate', (req, res) => {
+  if (_generating) {
+    return res.status(409).json({ error: '任务正在生成中，请勿重复操作' });
+  }
+  _generating = true;
   try {
     const { startDate, endDate } = req.body;
     const count = generateTasks(startDate || undefined, endDate || undefined);
@@ -72,6 +77,8 @@ router.post('/generate', (req, res) => {
     res.json({ message: count > 0 ? `已生成 ${count} 个任务（${rangeMsg}）` : '无新任务需要生成（可能已全部生成）', count });
   } catch (err) {
     res.status(500).json({ error: '任务生成失败: ' + err.message });
+  } finally {
+    _generating = false;
   }
 });
 

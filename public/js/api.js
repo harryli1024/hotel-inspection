@@ -1,5 +1,6 @@
 const API = {
   baseUrl: '/api',
+  defaultTimeout: 15000,
 
   getToken() {
     return localStorage.getItem('token');
@@ -11,17 +12,28 @@ const API = {
     if (token) headers['Authorization'] = 'Bearer ' + token;
     if (!isFormData) headers['Content-Type'] = 'application/json';
 
-    const options = { method, headers };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(function() { controller.abort(); }, API.defaultTimeout);
+
+    const options = { method, headers, signal: controller.signal };
     if (body) {
       options.body = isFormData ? body : JSON.stringify(body);
     }
 
-    const res = await fetch(this.baseUrl + path, options);
+    var res;
+    try {
+      res = await fetch(this.baseUrl + path, options);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') throw new Error('请求超时，请检查网络后重试');
+      throw new Error('网络错误，请检查网络连接');
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (res.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      const isMobile = location.pathname.includes('/mobile') || location.pathname.includes('/admin');
       if (location.pathname.includes('/admin')) {
         location.href = '/admin/index.html';
       } else {
@@ -50,6 +62,7 @@ const API = {
     return new Promise(function(resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API.baseUrl + path);
+      xhr.timeout = 120000; // 2 min for file uploads
       var token = API.getToken();
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
 
@@ -76,7 +89,8 @@ const API = {
         }
       };
 
-      xhr.onerror = function() { reject(new Error('网络错误')); };
+      xhr.onerror = function() { reject(new Error('网络错误，请检查网络连接')); };
+      xhr.ontimeout = function() { reject(new Error('上传超时，请检查网络后重试')); };
       xhr.send(formData);
     });
   },

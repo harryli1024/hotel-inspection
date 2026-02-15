@@ -15,12 +15,23 @@
       <div class="role" id="userRole"></div>
     </div>
 
-    <div class="progress-section" id="progressSection"></div>
+    <div class="progress-section" id="progressSection">
+      <div class="skeleton" style="height:14px;width:40%;margin-bottom:8px;border-radius:4px;"></div>
+      <div class="skeleton" style="height:12px;width:100%;border-radius:10px;"></div>
+    </div>
 
-    <div class="stats-grid" id="statsGrid"></div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="skeleton" style="height:28px;width:40px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton" style="height:12px;width:80%;margin:0 auto;border-radius:4px;"></div></div>
+      <div class="stat-card"><div class="skeleton" style="height:28px;width:40px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton" style="height:12px;width:80%;margin:0 auto;border-radius:4px;"></div></div>
+      <div class="stat-card"><div class="skeleton" style="height:28px;width:40px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton" style="height:12px;width:80%;margin:0 auto;border-radius:4px;"></div></div>
+      <div class="stat-card"><div class="skeleton" style="height:28px;width:40px;margin:0 auto 4px;border-radius:4px;"></div><div class="skeleton" style="height:12px;width:80%;margin:0 auto;border-radius:4px;"></div></div>
+    </div>
 
     <div class="section-title">最近记录</div>
-    <div class="record-list" id="recordList"></div>
+    <div class="record-list" id="recordList">
+      <div class="skeleton-card"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+      <div class="skeleton-card"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+    </div>
 
     <div class="profile-actions">
       <button class="btn btn-default btn-block" onclick="changePassword()">修改密码</button>
@@ -51,7 +62,6 @@
     var roleMap = { staff: '接待员', admin: '管理员', super_admin: '超级管理员' };
     document.getElementById('userRole').textContent = roleMap[user.role] || user.role;
 
-    Utils.showLoading('加载中...');
     loadStats();
 
     async function loadStats() {
@@ -62,8 +72,6 @@
         renderRecords(data.recentRecords);
       } catch (err) {
         Utils.showToast(err.message, 'error');
-      } finally {
-        Utils.hideLoading();
       }
     }
 

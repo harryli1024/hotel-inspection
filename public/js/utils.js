@@ -81,8 +81,9 @@ const Utils = {
     return params.get(name);
   },
 
-  // Button loading state with 10s timeout auto-recovery
-  btnLoading(btn, text) {
+  // Button loading state with timeout auto-recovery
+  // timeoutMs: default 15s, use longer for uploads
+  btnLoading(btn, text, timeoutMs) {
     if (btn._loading) return false;
     btn._loading = true;
     btn._originalHtml = btn.innerHTML;
@@ -91,7 +92,7 @@ const Utils = {
     btn._timeout = setTimeout(function() {
       Utils.btnReset(btn);
       Utils.showToast('请求超时，请重试', 'error');
-    }, 10000);
+    }, timeoutMs || 15000);
     return true;
   },
 

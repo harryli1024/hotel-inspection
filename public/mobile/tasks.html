@@ -98,7 +98,13 @@
       <div class="tab" data-status="completed" onclick="switchTab(this)">已完成</div>
     </div>
 
-    <div class="task-list" id="taskList"></div>
+    <div class="task-list" id="taskList">
+      <div id="taskSkeleton">
+        <div class="skeleton-card"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+      </div>
+    </div>
   </div>
 
   <nav class="bottom-nav">
@@ -122,7 +128,6 @@
     var user = AUTH.getUser();
     document.getElementById('headerUser').textContent = user.realName;
 
-    Utils.showLoading('加载任务...');
     loadTasks();
     setInterval(loadTasks, 60000);
 
@@ -142,8 +147,6 @@
         renderGrouped(data.groups, data.totalTasks);
       } catch (err) {
         Utils.showToast(err.message, 'error');
-      } finally {
-        Utils.hideLoading();
       }
     }
 

@@ -174,7 +174,7 @@
       if (!validateForm()) return;
 
       var btn = document.getElementById('submitBtn');
-      if (!Utils.btnLoading(btn, '上传中...')) return;
+      if (!Utils.btnLoading(btn, '上传中...', 120000)) return;
 
       try {
         var formData = new FormData();

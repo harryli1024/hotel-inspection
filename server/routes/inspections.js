@@ -144,8 +144,12 @@ router.post('/', upload.array('photos', 10), async (req, res) => {
       complianceStatus,
     });
   } catch (err) {
-    if (err.message.includes('无法提交') || err.message.includes('已被完成')) {
-      return res.status(400).json({ error: err.message });
+    if (err.message.includes('无法提交') || err.message.includes('已被完成') || err.message.includes('已超时')) {
+      return res.status(409).json({ error: err.message });
+    }
+    // UNIQUE constraint = another user submitted for same task concurrently
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || (err.message && err.message.includes('UNIQUE'))) {
+      return res.status(409).json({ error: '该任务已被其他人提交，请返回刷新任务列表' });
     }
     console.error('Inspection submission error:', err);
     res.status(500).json({ error: '提交失败，请重试' });
@@ -195,6 +199,13 @@ router.put('/:id/review', requireRole('admin', 'super_admin'), (req, res) => {
 
   if (!result) {
     return res.status(404).json({ error: '记录不存在' });
+  }
+
+  if (result.alreadyReviewed) {
+    const statusMap = { approved: '通过', punished: '处罚' };
+    return res.status(409).json({
+      error: '该记录已被审核（' + (statusMap[result.currentStatus] || '已审核') + '），请刷新页面',
+    });
   }
 
   const msg = reviewStatus === 'approved' ? '已通过' : '已标记处罚';

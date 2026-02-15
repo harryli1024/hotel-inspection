@@ -132,14 +132,24 @@ const Inspection = {
   },
 
   review(id, { reviewStatus, reviewComment, reviewerId }) {
-    const record = db.prepare('SELECT id FROM inspection_records WHERE id = ?').get(id);
+    const record = db.prepare('SELECT id, review_status FROM inspection_records WHERE id = ?').get(id);
     if (!record) return null;
 
-    db.prepare(`
+    // Prevent double-review: only allow reviewing records that haven't been reviewed yet
+    if (record.review_status && record.review_status !== 'pending') {
+      return { alreadyReviewed: true, currentStatus: record.review_status };
+    }
+
+    const result = db.prepare(`
       UPDATE inspection_records
       SET review_status = ?, review_comment = ?, reviewer_id = ?, reviewed_at = datetime('now', 'localtime')
-      WHERE id = ?
+      WHERE id = ? AND (review_status IS NULL OR review_status = 'pending')
     `).run(reviewStatus, reviewComment || null, reviewerId, id);
+
+    // If no rows changed, another admin reviewed it between our SELECT and UPDATE
+    if (result.changes === 0) {
+      return { alreadyReviewed: true };
+    }
 
     return true;
   },
