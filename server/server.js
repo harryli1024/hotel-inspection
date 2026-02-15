@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const config = require('./config');
 
 // Ensure upload directory exists
@@ -11,8 +12,20 @@ require('./models/db');
 const { startScheduler } = require('./services/taskScheduler');
 startScheduler();
 
-// Start server
+// Start server (HTTPS if certs exist, otherwise HTTP)
 const app = require('./app');
-app.listen(config.port, () => {
-  console.log(`酒店巡检系统已启动: http://localhost:${config.port}`);
-});
+const certDir = path.join(__dirname, '../certs');
+const keyPath = path.join(certDir, 'key.pem');
+const certPath = path.join(certDir, 'cert.pem');
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  const https = require('https');
+  const options = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+  https.createServer(options, app).listen(config.port, () => {
+    console.log(`酒店巡检系统已启动 (HTTPS): https://localhost:${config.port}`);
+  });
+} else {
+  app.listen(config.port, () => {
+    console.log(`酒店巡检系统已启动 (HTTP): http://localhost:${config.port}`);
+  });
+}
