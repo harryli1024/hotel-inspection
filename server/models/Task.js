@@ -38,7 +38,7 @@ const Task = {
       params.push(date);
     }
     if (status) {
-      where += ' AND t.status = ?';
+      where += " AND (CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END) = ?";
       params.push(status);
     }
     if (checkpointId) {
@@ -53,6 +53,7 @@ const Task = {
     const offset = (page - 1) * limit;
     const rows = db.prepare(`
       SELECT t.*,
+             CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END as status,
              c.name as checkpoint_name,
              a.name as area_name, a.floor, a.building,
              ir.inspector_id,
@@ -140,12 +141,13 @@ const Task = {
       params.push(date);
     }
     if (status) {
-      where += ' AND t.status = ?';
+      where += " AND (CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END) = ?";
       params.push(status);
     }
 
     const rows = db.prepare(`
       SELECT t.*,
+             CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END as status,
              c.name as checkpoint_name, c.id as checkpoint_id,
              a.name as area_name, a.id as area_id, a.floor, a.building,
              u.real_name as completed_by_name,
@@ -200,6 +202,7 @@ const Task = {
   findById(id) {
     const task = db.prepare(`
       SELECT t.*,
+             CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END as status,
              c.name as checkpoint_name,
              a.name as area_name, a.floor, a.building
       FROM inspection_tasks t
@@ -263,8 +266,8 @@ const Task = {
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue
+        SUM(CASE WHEN status = 'pending' AND window_end >= datetime('now','localtime') THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'overdue' OR (status = 'pending' AND window_end < datetime('now','localtime')) THEN 1 ELSE 0 END) as overdue
       FROM inspection_tasks
       ${where}
     `).get(...params);
@@ -313,7 +316,7 @@ const Task = {
       SELECT date(due_time) as date,
              COUNT(*) as total,
              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-             SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue
+             SUM(CASE WHEN status = 'overdue' OR (status = 'pending' AND window_end < datetime('now','localtime')) THEN 1 ELSE 0 END) as overdue
       FROM inspection_tasks
       WHERE date(due_time) >= date('now', 'localtime', ?)
       GROUP BY date(due_time)
