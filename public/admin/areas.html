@@ -138,10 +138,6 @@
       <div class="modal-body">
         <input type="hidden" id="itemEditId">
         <div class="form-group">
-          <label>项目标识 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="itemKey" placeholder="英文标识，如: mirror_clean">
-        </div>
-        <div class="form-group">
           <label>项目名称 <span class="required">*</span></label>
           <input type="text" class="form-input" id="itemName" placeholder="如: 镜面是否清洁">
         </div>
@@ -446,8 +442,6 @@
     function openCreateItem() {
       document.getElementById('itemModalTitle').textContent = '新建检查项';
       document.getElementById('itemEditId').value = '';
-      document.getElementById('itemKey').value = '';
-      document.getElementById('itemKey').disabled = false;
       document.getElementById('itemName').value = '';
       document.getElementById('itemType').value = 'radio';
       document.getElementById('itemOptions').value = '';
@@ -478,9 +472,7 @@
         if (editId) {
           await API.put('/inspect-items/' + editId, { itemName: name, inputType: type, options: options, required: required });
         } else {
-          var key = document.getElementById('itemKey').value.trim();
-          if (!key) { Utils.btnReset(btn); Utils.showToast('请输入项目标识', 'warning'); return; }
-          await API.post('/inspect-items', { itemKey: key, itemName: name, inputType: type, options: options, required: required });
+          await API.post('/inspect-items', { itemName: name, inputType: type, options: options, required: required });
         }
         Utils.btnReset(btn);
         closeModal('itemModal');

@@ -14,19 +14,20 @@ router.get('/', (req, res) => {
 
 // POST /api/inspect-items - Create custom item
 router.post('/', (req, res) => {
-  const { itemKey, itemName, inputType, options, required } = req.body;
-  if (!itemKey || !itemName || !inputType) {
+  const { itemName, inputType, options, required } = req.body;
+  if (!itemName || !inputType) {
     return res.status(400).json({ error: '请填写完整信息' });
   }
   if (inputType === 'radio' && (!options || !Array.isArray(options) || options.length < 2)) {
     return res.status(400).json({ error: '单选项至少需要2个选项' });
   }
+  const itemKey = 'custom_' + Date.now();
   try {
     const id = InspectItem.create({ itemKey, itemName, inputType, options, required });
     res.status(201).json({ id, message: '创建成功' });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
-      return res.status(400).json({ error: '检查项标识已存在' });
+      return res.status(400).json({ error: '创建失败，请重试' });
     }
     throw err;
   }
