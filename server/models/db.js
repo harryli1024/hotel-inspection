@@ -29,4 +29,39 @@ if (userCount.count === 0) {
   console.log('Default super admin created: admin / admin123');
 }
 
+// Seed default inspection items if table is empty
+const itemCount = db.prepare('SELECT COUNT(*) as count FROM inspect_items').get();
+if (itemCount.count === 0) {
+  const defaultItems = [
+    { key: 'floor_clean', name: '地面是否干净', type: 'radio', options: '["干净","脏污"]', required: 1, sort: 1 },
+    { key: 'tissue_supply', name: '是否缺少纸巾', type: 'radio', options: '["充足","缺少"]', required: 1, sort: 2 },
+    { key: 'soap_supply', name: '是否缺少洗手液', type: 'radio', options: '["充足","缺少"]', required: 1, sort: 3 },
+    { key: 'equipment_status', name: '设备是否损坏', type: 'radio', options: '["正常","损坏"]', required: 1, sort: 4 },
+    { key: 'notes', name: '备注说明', type: 'text', options: null, required: 0, sort: 5 },
+  ];
+  const insertItem = db.prepare(
+    'INSERT INTO inspect_items (item_key, item_name, input_type, options, required, is_default, sort_order) VALUES (?, ?, ?, ?, ?, 1, ?)'
+  );
+  db.transaction(() => {
+    for (const item of defaultItems) {
+      insertItem.run(item.key, item.name, item.type, item.options, item.required, item.sort);
+    }
+  })();
+
+  // Auto-link defaults to all existing areas
+  const existingAreas = db.prepare('SELECT id FROM areas').all();
+  const allDefaults = db.prepare('SELECT id, sort_order FROM inspect_items WHERE is_default = 1').all();
+  if (existingAreas.length > 0 && allDefaults.length > 0) {
+    const linkStmt = db.prepare('INSERT OR IGNORE INTO area_inspect_items (area_id, item_id, sort_order) VALUES (?, ?, ?)');
+    db.transaction(() => {
+      for (const area of existingAreas) {
+        for (const item of allDefaults) {
+          linkStmt.run(area.id, item.id, item.sort_order);
+        }
+      }
+    })();
+  }
+  console.log('Default inspection items seeded');
+}
+
 module.exports = db;

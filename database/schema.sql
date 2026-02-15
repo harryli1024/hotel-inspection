@@ -111,3 +111,28 @@ CREATE INDEX IF NOT EXISTS idx_records_inspector ON inspection_records(inspector
 CREATE INDEX IF NOT EXISTS idx_records_checkpoint ON inspection_records(checkpoint_id);
 CREATE INDEX IF NOT EXISTS idx_records_compliance ON inspection_records(compliance_status);
 CREATE INDEX IF NOT EXISTS idx_schedules_status ON task_schedules(status);
+
+CREATE TABLE IF NOT EXISTS inspect_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_key TEXT NOT NULL UNIQUE,
+    item_name TEXT NOT NULL,
+    input_type TEXT NOT NULL CHECK(input_type IN ('radio', 'text')),
+    options TEXT,
+    required INTEGER NOT NULL DEFAULT 1,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS area_inspect_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    area_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_id) REFERENCES inspect_items(id) ON DELETE CASCADE,
+    UNIQUE(area_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_area_inspect_items_area ON area_inspect_items(area_id);
+CREATE INDEX IF NOT EXISTS idx_inspect_items_default ON inspect_items(is_default);

@@ -3,6 +3,7 @@ const auth = require('../middleware/auth');
 const requireRole = require('../middleware/role');
 const Area = require('../models/Area');
 const Checkpoint = require('../models/Checkpoint');
+const InspectItem = require('../models/InspectItem');
 
 const router = express.Router();
 router.use(auth);
@@ -114,6 +115,27 @@ router.put('/:areaId/checkpoints/reorder', requireRole('admin', 'super_admin'), 
   }
   Checkpoint.reorder(req.params.areaId, orderedIds);
   res.json({ message: '排序已更新' });
+});
+
+// --- Inspect items routes nested under areas ---
+
+// GET /api/areas/:areaId/inspect-items - All items with enabled status for this area
+router.get('/:areaId/inspect-items', (req, res) => {
+  const area = Area.findById(req.params.areaId);
+  if (!area) return res.status(404).json({ error: '区域不存在' });
+  res.json(InspectItem.findAllWithAreaStatus(req.params.areaId));
+});
+
+// PUT /api/areas/:areaId/inspect-items - Save enabled items
+router.put('/:areaId/inspect-items', requireRole('admin', 'super_admin'), (req, res) => {
+  const area = Area.findById(req.params.areaId);
+  if (!area) return res.status(404).json({ error: '区域不存在' });
+  const { itemIds } = req.body;
+  if (!Array.isArray(itemIds)) {
+    return res.status(400).json({ error: '参数错误' });
+  }
+  InspectItem.setAreaItems(parseInt(req.params.areaId), itemIds.map(Number));
+  res.json({ message: '保存成功' });
 });
 
 module.exports = router;

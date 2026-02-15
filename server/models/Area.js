@@ -42,7 +42,10 @@ const Area = {
     const result = db.prepare(
       'INSERT INTO areas (name, floor, building, description) VALUES (?, ?, ?, ?)'
     ).run(name, floor || null, building || null, description || null);
-    return result.lastInsertRowid;
+    const id = result.lastInsertRowid;
+    const InspectItem = require('./InspectItem');
+    InspectItem.linkDefaultsToArea(id);
+    return id;
   },
 
   update(id, { name, floor, building, description }) {

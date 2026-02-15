@@ -77,29 +77,28 @@
       document.getElementById('taskInfo').innerHTML = html;
     }
 
-    // Fixed inspection items (must match server/config/inspectItems.js)
-    var INSPECT_ITEMS = [
-      { id: 'cleanliness', name: '卫生状况', inputType: 'radio', options: ['干净', '脏污'], required: true },
-      { id: 'supplies', name: '纸巾/洗手液', inputType: 'radio', options: ['充足', '缺少'], required: true },
-      { id: 'equipment', name: '设备状况', inputType: 'radio', options: ['正常', '损坏'], required: true },
-      { id: 'notes', name: '备注', inputType: 'text', options: null, required: false },
-    ];
-
     function renderForm() {
+      var items = task.inspectItems || [];
+      if (items.length === 0) {
+        document.getElementById('inspectForm').innerHTML =
+          '<div style="color:var(--text-light);text-align:center;padding:20px;">该区域暂无检查项</div>';
+        return;
+      }
       var html = '';
-      INSPECT_ITEMS.forEach(function(item) {
+      items.forEach(function(item) {
+        var itemId = item.item_key;
         var required = item.required ? '<span class="required">*</span>' : '';
-        html += '<div class="form-item" data-item-id="' + item.id + '" data-required="' + item.required + '">';
-        html += '<div class="item-label">' + item.name + required + '</div>';
+        html += '<div class="form-item" data-item-id="' + itemId + '" data-required="' + (item.required ? 'true' : 'false') + '">';
+        html += '<div class="item-label">' + item.item_name + required + '</div>';
 
-        if (item.inputType === 'radio') {
+        if (item.input_type === 'radio' && item.options) {
           html += '<div class="radio-group">';
           item.options.forEach(function(opt) {
-            html += '<div class="radio-option" data-value="' + opt + '" onclick="selectRadio(this, \'' + item.id + '\')">' + opt + '</div>';
+            html += '<div class="radio-option" data-value="' + opt + '" onclick="selectRadio(this, \'' + itemId + '\')">' + opt + '</div>';
           });
           html += '</div>';
         } else {
-          html += '<textarea class="form-textarea" onchange="formValues[\'' + item.id + '\']=this.value" placeholder="请输入"></textarea>';
+          html += '<textarea class="form-textarea" onchange="formValues[\'' + itemId + '\']=this.value" placeholder="请输入"></textarea>';
         }
 
         html += '</div>';
@@ -155,10 +154,11 @@
     }
 
     function validateForm() {
-      for (var i = 0; i < INSPECT_ITEMS.length; i++) {
-        var item = INSPECT_ITEMS[i];
-        if (item.required && (!formValues[item.id] || formValues[item.id] === '')) {
-          Utils.showToast('请填写: ' + item.name, 'warning');
+      var items = task.inspectItems || [];
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item.required && (!formValues[item.item_key] || formValues[item.item_key] === '')) {
+          Utils.showToast('请填写: ' + item.item_name, 'warning');
           return false;
         }
       }
@@ -191,12 +191,12 @@
         formData.append('photosMeta', JSON.stringify(photosMeta));
 
         var items = [];
-        INSPECT_ITEMS.forEach(function(item) {
+        (task.inspectItems || []).forEach(function(item) {
           items.push({
-            itemKey: item.id,
-            itemName: item.name,
-            inputType: item.inputType,
-            value: formValues[item.id] || '',
+            itemKey: item.item_key,
+            itemName: item.item_name,
+            inputType: item.input_type,
+            value: formValues[item.item_key] || '',
           });
         });
         formData.append('items', JSON.stringify(items));

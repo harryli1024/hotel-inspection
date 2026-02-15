@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const config = require('../config');
-const INSPECT_ITEMS = require('../config/inspectItems');
+const InspectItem = require('./InspectItem');
 
 const Task = {
   // Staff sees only pending tasks within their time window (not yet past window_end)
@@ -204,6 +204,7 @@ const Task = {
       SELECT t.*,
              CASE WHEN t.status = 'pending' AND t.window_end < datetime('now','localtime') THEN 'overdue' ELSE t.status END as status,
              c.name as checkpoint_name,
+             c.area_id,
              a.name as area_name, a.floor, a.building
       FROM inspection_tasks t
       LEFT JOIN checkpoints c ON t.checkpoint_id = c.id
@@ -212,7 +213,7 @@ const Task = {
     `).get(id);
 
     if (task) {
-      task.inspectItems = INSPECT_ITEMS;
+      task.inspectItems = task.area_id ? InspectItem.findByAreaId(task.area_id) : [];
     }
 
     return task;

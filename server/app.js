@@ -31,6 +31,7 @@ app.use('/api/schedules', require('./routes/schedules'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/inspections', require('./routes/inspections'));
 app.use('/api/export', require('./routes/export'));
+app.use('/api/inspect-items', require('./routes/inspectItems'));
 
 // Serve mobile fallback
 app.get('/mobile', (req, res) => {
