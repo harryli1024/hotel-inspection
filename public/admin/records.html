@@ -111,6 +111,7 @@
       return '<span style="background:#faad14;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">待审核</span>';
     }
 
+    Utils.showLoading('加载中...');
     loadFilters();
     loadRecords();
 
@@ -186,6 +187,8 @@
         renderPagination(data.total, data.page, data.limit);
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -272,16 +275,20 @@
     }
 
     async function submitReview(recordId, reviewStatus) {
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '提交中...')) return;
       var comment = document.getElementById('reviewComment').value.trim();
       try {
         var result = await API.put('/inspections/' + recordId + '/review', {
           reviewStatus: reviewStatus,
           reviewComment: comment,
         });
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         closeModal('detailModal');
         loadRecords(currentPage);
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }

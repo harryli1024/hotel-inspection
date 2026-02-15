@@ -126,6 +126,7 @@
     var selectedAreaId = null;
     var user = AUTH.getUser();
     var isSuperAdmin = user.role === 'super_admin';
+    Utils.showLoading('加载中...');
     loadAreas();
 
     async function loadAreas() {
@@ -150,6 +151,8 @@
         document.getElementById('areaList').innerHTML = html;
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -219,13 +222,17 @@
         description: document.getElementById('areaDesc').value.trim(),
       };
       var editId = document.getElementById('areaEditId').value;
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '保存中...')) return;
       try {
         if (editId) { await API.put('/areas/' + editId, data); }
         else { await API.post('/areas', data); }
+        Utils.btnReset(btn);
         closeModal('areaModal');
         Utils.showToast('保存成功', 'success');
         loadAreas();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
@@ -247,8 +254,11 @@
     }
 
     async function deleteArea(id) {
+      var btn = document.getElementById('confirmBtn');
+      if (!Utils.btnLoading(btn, '删除中...')) return;
       try {
         var result = await API.del('/areas/' + id);
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         closeModal('confirmModal');
         selectedAreaId = null;
@@ -258,6 +268,7 @@
         document.getElementById('addCpBtn').style.display = 'none';
         loadAreas();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
@@ -283,14 +294,18 @@
       if (!name) { Utils.showToast('请输入检查点名称', 'warning'); return; }
       var data = { name: name, description: document.getElementById('cpDesc').value.trim() };
       var editId = document.getElementById('cpEditId').value;
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '保存中...')) return;
       try {
         if (editId) { await API.put('/checkpoints/' + editId, data); }
         else { await API.post('/areas/' + selectedAreaId + '/checkpoints', data); }
+        Utils.btnReset(btn);
         closeModal('cpModal');
         Utils.showToast('保存成功', 'success');
         selectArea(selectedAreaId);
         loadAreas();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
@@ -312,13 +327,17 @@
     }
 
     async function deleteCp(id) {
+      var btn = document.getElementById('confirmBtn');
+      if (!Utils.btnLoading(btn, '删除中...')) return;
       try {
         var result = await API.del('/areas/' + selectedAreaId + '/checkpoints/' + id);
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         closeModal('confirmModal');
         selectArea(selectedAreaId);
         loadAreas();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }

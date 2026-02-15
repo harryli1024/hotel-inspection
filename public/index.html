@@ -46,8 +46,7 @@
       var btn = document.getElementById('loginBtn');
       var errorEl = document.getElementById('loginError');
       errorEl.textContent = '';
-      btn.disabled = true;
-      btn.textContent = '登录中...';
+      if (!Utils.btnLoading(btn, '登录中...')) return false;
 
       try {
         var user = await AUTH.login(
@@ -57,9 +56,7 @@
         redirectByRole(user);
       } catch (err) {
         errorEl.textContent = err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '登 录';
+        Utils.btnReset(btn);
       }
       return false;
     }

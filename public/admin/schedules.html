@@ -97,6 +97,7 @@
   <script src="/js/admin/layout.js"></script>
   <script>
     initAdminLayout('schedules');
+    Utils.showLoading('加载中...');
     loadSchedules();
     loadFormData();
 
@@ -149,6 +150,8 @@
         }).join('');
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -212,13 +215,17 @@
       };
 
       var editId = document.getElementById('editId').value;
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '保存中...')) return;
       try {
         if (editId) { await API.put('/schedules/' + editId, data); }
         else { await API.post('/schedules', data); }
+        Utils.btnReset(btn);
         closeModal('scheduleModal');
         Utils.showToast('保存成功', 'success');
         loadSchedules();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }

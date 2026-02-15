@@ -46,7 +46,7 @@ const Utils = {
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    }, 2000);
   },
 
   showLoading(message) {
@@ -79,5 +79,26 @@ const Utils = {
   getQueryParam(name) {
     const params = new URLSearchParams(location.search);
     return params.get(name);
+  },
+
+  // Button loading state with 10s timeout auto-recovery
+  btnLoading(btn, text) {
+    if (btn._loading) return false;
+    btn._loading = true;
+    btn._originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span>' + (text || '处理中...');
+    btn._timeout = setTimeout(function() {
+      Utils.btnReset(btn);
+      Utils.showToast('请求超时，请重试', 'error');
+    }, 10000);
+    return true;
+  },
+
+  btnReset(btn) {
+    if (btn._timeout) { clearTimeout(btn._timeout); btn._timeout = null; }
+    btn.disabled = false;
+    btn.innerHTML = btn._originalHtml || '';
+    btn._loading = false;
   },
 };

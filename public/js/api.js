@@ -45,4 +45,39 @@ const API = {
   put(path, body) { return this.request('PUT', path, body); },
   del(path) { return this.request('DELETE', path); },
   postForm(path, formData) { return this.request('POST', path, formData, true); },
+
+  postFormProgress(path, formData, onProgress) {
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', API.baseUrl + path);
+      var token = API.getToken();
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round(e.loaded / e.total * 100));
+        }
+      };
+
+      xhr.onload = function() {
+        if (xhr.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          location.href = location.pathname.includes('/admin') ? '/admin/index.html' : '/mobile/index.html';
+          reject(new Error('登录已过期'));
+          return;
+        }
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+          else reject(new Error(data.error || '请求失败'));
+        } catch (e) {
+          reject(new Error('请求失败'));
+        }
+      };
+
+      xhr.onerror = function() { reject(new Error('网络错误')); };
+      xhr.send(formData);
+    });
+  },
 };

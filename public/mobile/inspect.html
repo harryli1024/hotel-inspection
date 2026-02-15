@@ -54,6 +54,7 @@
     var camera = new CameraCapture();
     var formValues = {};
 
+    Utils.showLoading('加载任务...');
     loadTask();
 
     async function loadTask() {
@@ -64,6 +65,8 @@
       } catch (err) {
         Utils.showToast(err.message, 'error');
         setTimeout(function() { location.href = '/mobile/tasks.html'; }, 1500);
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -171,8 +174,7 @@
       if (!validateForm()) return;
 
       var btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      Utils.showLoading('正在提交...');
+      if (!Utils.btnLoading(btn, '上传中...')) return;
 
       try {
         var formData = new FormData();
@@ -188,7 +190,6 @@
         }
         formData.append('photosMeta', JSON.stringify(photosMeta));
 
-        // Build items array from fixed inspect items
         var items = [];
         INSPECT_ITEMS.forEach(function(item) {
           items.push({
@@ -206,15 +207,18 @@
         formData.append('gpsAccuracy', gps.accuracy || '');
         formData.append('deviceInfo', navigator.userAgent);
 
-        var result = await API.postForm('/inspections', formData);
+        var result = await API.postFormProgress('/inspections', formData, function(pct) {
+          btn.innerHTML = '<span class="btn-spinner"></span>上传中 ' + pct + '%';
+        });
 
-        Utils.hideLoading();
+        Utils.btnReset(btn);
+        btn.disabled = true;
+        btn.textContent = '提交成功';
         Utils.showToast(result.message || '提交成功', result.complianceStatus === 'on_time' ? 'success' : 'warning');
         setTimeout(function() { location.href = '/mobile/tasks.html'; }, 2000);
       } catch (err) {
-        Utils.hideLoading();
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
-        btn.disabled = false;
       }
     }
   </script>

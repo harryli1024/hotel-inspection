@@ -43,6 +43,7 @@
   <script src="/js/admin/layout.js"></script>
   <script>
     initAdminLayout('dashboard');
+    Utils.showLoading('加载中...');
     loadDashboard();
 
     async function loadDashboard() {
@@ -89,6 +90,8 @@
         }
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
   </script>

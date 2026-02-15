@@ -122,6 +122,7 @@
     var user = AUTH.getUser();
     document.getElementById('headerUser').textContent = user.realName;
 
+    Utils.showLoading('加载任务...');
     loadTasks();
     setInterval(loadTasks, 60000);
 
@@ -141,6 +142,8 @@
         renderGrouped(data.groups, data.totalTasks);
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 

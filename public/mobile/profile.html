@@ -51,6 +51,7 @@
     var roleMap = { staff: '接待员', admin: '管理员', super_admin: '超级管理员' };
     document.getElementById('userRole').textContent = roleMap[user.role] || user.role;
 
+    Utils.showLoading('加载中...');
     loadStats();
 
     async function loadStats() {
@@ -61,6 +62,8 @@
         renderRecords(data.recentRecords);
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 

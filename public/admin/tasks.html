@@ -166,6 +166,7 @@
     document.getElementById('genStartDate').value = Utils.formatDate(genStart);
     document.getElementById('genEndDate').value = Utils.formatDate(genEnd);
 
+    Utils.showLoading('加载中...');
     loadTasks();
 
     async function loadTasks() {
@@ -182,6 +183,8 @@
         renderGroups(data.groups);
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -281,11 +284,15 @@
       if (startDate > endDate) { Utils.showToast('开始日期不能晚于结束日期', 'error'); return; }
       var diff = Math.round((new Date(endDate) - new Date(startDate)) / 86400000);
       if (diff > 6) { Utils.showToast('最多生成7天的任务', 'error'); return; }
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '生成中...')) return;
       try {
         var result = await API.post('/schedules/generate', { startDate: startDate, endDate: endDate });
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         loadTasks();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
@@ -303,23 +310,31 @@
     }
 
     async function deleteTask(taskId) {
+      var btn = document.getElementById('confirmBtn');
+      if (!Utils.btnLoading(btn, '删除中...')) return;
       try {
         var result = await API.del('/tasks/' + taskId);
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         closeModal('confirmModal');
         loadTasks();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
 
     async function deleteAllTasks() {
+      var btn = document.getElementById('confirmBtn');
+      if (!Utils.btnLoading(btn, '删除中...')) return;
       try {
         var result = await API.del('/tasks/all');
+        Utils.btnReset(btn);
         Utils.showToast(result.message, 'success');
         closeModal('confirmModal');
         loadTasks();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }

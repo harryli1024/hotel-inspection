@@ -83,6 +83,7 @@
     if (currentUser.role !== 'super_admin') {
       document.getElementById('roleGroup').style.display = 'none';
     }
+    Utils.showLoading('加载中...');
     loadUsers();
 
     async function loadUsers(page) {
@@ -122,6 +123,8 @@
         document.getElementById('pagination').innerHTML = pHtml;
       } catch (err) {
         Utils.showToast(err.message, 'error');
+      } finally {
+        Utils.hideLoading();
       }
     }
 
@@ -168,20 +171,25 @@
         return;
       }
 
+      if (!editId) {
+        data.username = document.getElementById('formUsername').value.trim();
+        data.password = document.getElementById('formPassword').value;
+        if (!data.username) { Utils.showToast('请输入用户名', 'warning'); return; }
+        if (!data.password || data.password.length < 6) { Utils.showToast('密码至少6位', 'warning'); return; }
+      }
+
+      var btn = event.target;
+      if (!Utils.btnLoading(btn, '保存中...')) return;
+
       try {
-        if (editId) {
-          await API.put('/users/' + editId, data);
-        } else {
-          data.username = document.getElementById('formUsername').value.trim();
-          data.password = document.getElementById('formPassword').value;
-          if (!data.username) { Utils.showToast('请输入用户名', 'warning'); return; }
-          if (!data.password || data.password.length < 6) { Utils.showToast('密码至少6位', 'warning'); return; }
-          await API.post('/users', data);
-        }
+        if (editId) { await API.put('/users/' + editId, data); }
+        else { await API.post('/users', data); }
+        Utils.btnReset(btn);
         closeModal('userModal');
         Utils.showToast('保存成功', 'success');
         loadUsers();
       } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }
