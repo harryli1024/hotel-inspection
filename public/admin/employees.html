@@ -72,6 +72,23 @@
     </div>
   </div>
 
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h3>确认删除</h3>
+        <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="deleteMsg" style="color:var(--danger);"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeModal('deleteModal')">取消</button>
+        <button class="btn btn-danger" id="deleteConfirmBtn">确认删除</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/api.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/utils.js"></script>
@@ -79,8 +96,9 @@
   <script>
     initAdminLayout('employees');
     var currentUser = AUTH.getUser();
+    var isSuperAdmin = currentUser.role === 'super_admin';
     // Only super_admin can create admins
-    if (currentUser.role !== 'super_admin') {
+    if (!isSuperAdmin) {
       document.getElementById('roleGroup').style.display = 'none';
     }
     Utils.showLoading('加载中...');
@@ -99,6 +117,9 @@
             var statusBadge = u.status === 1
               ? '<span class="badge badge-completed">启用</span>'
               : '<span class="badge badge-overdue">停用</span>';
+            var deleteBtn = (isSuperAdmin && u.role !== 'super_admin')
+              ? '<button class="btn btn-small btn-danger" onclick="confirmDelete(' + u.id + ',\'' + u.real_name.replace(/'/g, "\\'") + '\')">删除</button>'
+              : '';
             return '<tr>' +
               '<td>' + u.id + '</td>' +
               '<td>' + u.username + '</td>' +
@@ -111,6 +132,7 @@
                 '<button class="btn btn-small btn-default" onclick="openEdit(' + u.id + ')">编辑</button>' +
                 '<button class="btn btn-small btn-default" onclick="resetPassword(' + u.id + ')">重置密码</button>' +
                 '<button class="btn btn-small ' + (u.status===1?'btn-danger':'btn-success') + '" onclick="toggleStatus(' + u.id + ')">' + (u.status===1?'停用':'启用') + '</button>' +
+                deleteBtn +
               '</td>' +
             '</tr>';
           }).join('');
@@ -212,6 +234,36 @@
         Utils.showToast(result.message, 'success');
         loadUsers();
       } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function confirmDelete(id, name) {
+      try {
+        var countData = await API.get('/users/' + id + '/record-count');
+        var count = countData.count || 0;
+        var msg = count > 0
+          ? '该员工"' + name + '"有 ' + count + ' 条巡检记录，删除后记录将保留但显示"已删除员工"。确认删除？'
+          : '确定要删除员工"' + name + '"吗？此操作不可撤销。';
+        document.getElementById('deleteMsg').textContent = msg;
+        document.getElementById('deleteConfirmBtn').onclick = function() { deleteUser(id); };
+        document.getElementById('deleteModal').classList.add('show');
+      } catch (err) {
+        Utils.showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteUser(id) {
+      var btn = document.getElementById('deleteConfirmBtn');
+      if (!Utils.btnLoading(btn, '删除中...')) return;
+      try {
+        var result = await API.del('/users/' + id);
+        Utils.btnReset(btn);
+        Utils.showToast(result.message, 'success');
+        closeModal('deleteModal');
+        loadUsers();
+      } catch (err) {
+        Utils.btnReset(btn);
         Utils.showToast(err.message, 'error');
       }
     }

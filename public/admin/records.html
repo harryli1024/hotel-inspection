@@ -175,7 +175,7 @@
               '<td>' + r.id + '</td>' +
               '<td>' + (r.checkpoint_name||'') + '</td>' +
               '<td>' + (r.area_name||'') + '</td>' +
-              '<td>' + (r.inspector_name||'') + '</td>' +
+              '<td>' + (r.inspector_name||'<span style="color:var(--text-light)">已删除员工</span>') + '</td>' +
               '<td>' + r.submitted_at + '</td>' +
               '<td>' + complianceBadge(r.compliance_status) + '</td>' +
               '<td>' + reviewBadge(r.review_status) + '</td>' +
@@ -217,7 +217,7 @@
         var record = await API.get('/inspections/' + id);
         var html = '<div class="detail-grid">' +
           '<div class="detail-item"><div class="label">检查点</div><div class="value">' + (record.area_name||'') + ' - ' + (record.checkpoint_name||'') + '</div></div>' +
-          '<div class="detail-item"><div class="label">检查员</div><div class="value">' + (record.inspector_name||'') + '</div></div>' +
+          '<div class="detail-item"><div class="label">检查员</div><div class="value">' + (record.inspector_name||'已删除员工') + '</div></div>' +
           '<div class="detail-item"><div class="label">提交时间</div><div class="value">' + record.submitted_at + '</div></div>' +
           '<div class="detail-item"><div class="label">合规状态</div><div class="value">' + complianceBadge(record.compliance_status) + '</div></div>' +
           '<div class="detail-item"><div class="label">任务时间窗口</div><div class="value">' + (record.task_window_start ? Utils.formatTime(record.task_window_start) + ' - ' + Utils.formatTime(record.task_window_end) : '无') + '</div></div>' +

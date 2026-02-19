@@ -72,6 +72,19 @@ const User = {
     ).run(status, id);
   },
 
+  getRecordCount(userId) {
+    return db.prepare(
+      'SELECT COUNT(*) as count FROM inspection_records WHERE inspector_id = ?'
+    ).get(userId).count;
+  },
+
+  deleteUser: db.transaction((id) => {
+    // Nullify references in inspection_records so records are preserved
+    db.prepare('UPDATE inspection_records SET inspector_id = NULL WHERE inspector_id = ?').run(id);
+    db.prepare('UPDATE inspection_records SET reviewer_id = NULL WHERE reviewer_id = ?').run(id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  }),
+
   getStaffStats(userId) {
     const today = new Date().toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);

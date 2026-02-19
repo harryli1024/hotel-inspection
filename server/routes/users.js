@@ -36,6 +36,16 @@ router.get('/me/stats', (req, res) => {
   res.json({ stats, recentRecords });
 });
 
+// GET /api/users/:id/record-count - Get inspection record count for a user
+router.get('/:id/record-count', requireRole('super_admin'), (req, res) => {
+  const user = User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  const count = User.getRecordCount(parseInt(req.params.id));
+  res.json({ count });
+});
+
 // GET /api/users/:id - Get user detail
 router.get('/:id', requireRole('admin', 'super_admin'), (req, res) => {
   const user = User.findById(req.params.id);
@@ -140,6 +150,33 @@ router.put('/:id/status', requireRole('admin', 'super_admin'), (req, res) => {
   const newStatus = user.status === 1 ? 0 : 1;
   User.toggleStatus(user.id, newStatus);
   res.json({ message: newStatus === 1 ? '已启用' : '已停用', status: newStatus });
+});
+
+// DELETE /api/users/:id - Delete user (super_admin only)
+router.delete('/:id', requireRole('super_admin'), (req, res) => {
+  const targetId = parseInt(req.params.id);
+  const user = User.findById(targetId);
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+
+  // Cannot delete yourself
+  if (req.user.userId === targetId) {
+    return res.status(400).json({ error: '不能删除自己的账号' });
+  }
+
+  // Cannot delete other super_admins
+  if (user.role === 'super_admin') {
+    return res.status(403).json({ error: '不能删除超级管理员账号' });
+  }
+
+  const recordCount = User.getRecordCount(targetId);
+  User.deleteUser(targetId);
+
+  const msg = recordCount > 0
+    ? `已删除"${user.real_name}"，其${recordCount}条巡检记录已保留`
+    : `已删除"${user.real_name}"`;
+  res.json({ message: msg });
 });
 
 module.exports = router;

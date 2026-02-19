@@ -54,7 +54,7 @@ router.get('/inspections', async (req, res) => {
         area_name: record.area_name || '',
         floor: record.floor || '',
         checkpoint_name: record.checkpoint_name || '',
-        inspector_name: record.inspector_name || '',
+        inspector_name: record.inspector_name || '已删除员工',
         submitted_at: record.submitted_at,
         compliance_status: { on_time: '按时', anomaly: '异常' }[record.compliance_status] || record.compliance_status,
         photo_count: record.photo_count,
